@@ -37,28 +37,6 @@ export default function Navbar() {
         </div>
 
         <div className="flex items-center gap-6">
-          {/* Optional: Add navigation links */}
-          <div className="hidden md:flex items-center gap-8">
-            <a
-              href="#"
-              className="text-white/60 hover:text-white/90 transition-colors text-sm"
-            >
-              Explore
-            </a>
-            <a
-              href="#"
-              className="text-white/60 hover:text-white/90 transition-colors text-sm"
-            >
-              Collections
-            </a>
-            <a
-              href="#"
-              className="text-white/60 hover:text-white/90 transition-colors text-sm"
-            >
-              About
-            </a>
-          </div>
-
           <div className="relative">
             {/* @ts-expect-error msg */}
             <appkit-button className="!relative !overflow-hidden " />

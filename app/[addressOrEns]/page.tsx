@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { type FC } from "react";
@@ -6,7 +7,7 @@ import { useAccount, useEnsName, useEnsAvatar, usePublicClient } from "wagmi";
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import Image from "next/image";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { isAddress } from "viem";
 import { normalize } from "viem/ens";
 
@@ -56,21 +57,6 @@ interface NFTAsset {
   rarity: NFTRarity;
 }
 
-interface TraitCounts {
-  [value: string]: number;
-}
-
-interface TraitsResponse {
-  categories: {
-    [trait: string]: string; // trait type -> data type (e.g., "string", "number")
-  };
-  counts: {
-    [trait: string]: {
-      [value: string]: number; // value -> count
-    };
-  };
-}
-
 interface OpenSeaAccount {
   profile_img_url: string;
   username: string;
@@ -113,47 +99,6 @@ const FEATURED_COLLECTORS: FeaturedCollector[] = [
 
 const getAssetId = (asset: NFTAsset): string => {
   return `${asset.contract}_${asset.identifier}`;
-};
-
-const fetchTraits = async (collectionSlug: string) => {
-  try {
-    console.log("Fetching traits for collection:", collectionSlug);
-    const res = await fetch(
-      `https://api.opensea.io/api/v2/traits/${collectionSlug}`,
-      {
-        headers: {
-          Accept: "application/json",
-          "x-api-key": process.env.NEXT_PUBLIC_OPENSEA_API_KEY || "",
-        },
-      }
-    );
-    if (!res.ok) throw new Error("Failed to fetch traits");
-    const data: TraitsResponse = await res.json();
-    console.log("Raw traits response:", data);
-    return data;
-  } catch (error) {
-    console.error("Error fetching traits:", error);
-    return null;
-  }
-};
-
-const fetchCollectionDetails = async (collectionSlug: string) => {
-  try {
-    const res = await fetch(
-      `https://api.opensea.io/api/v2/collections/${collectionSlug}`,
-      {
-        headers: {
-          Accept: "application/json",
-          "x-api-key": process.env.NEXT_PUBLIC_OPENSEA_API_KEY || "",
-        },
-      }
-    );
-    if (!res.ok) throw new Error("Failed to fetch collection");
-    return await res.json();
-  } catch (error) {
-    console.error("Error fetching collection:", error);
-    return null;
-  }
 };
 
 const fetchOpenSeaAccount = async (address: string) => {
@@ -207,28 +152,14 @@ const getOptimizedImageUrl = (url: string) => {
   return url;
 };
 
-// Add debounce utility
-const debounce = (func: Function, wait: number) => {
-  let timeout: NodeJS.Timeout;
-  return (...args: any[]) => {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => func(...args), wait);
-  };
-};
-
-// Update the shuffle mechanism to be more performant
-const shuffleArray = (array: NFTAsset[]) => {
-  // Create a new array with indices
-  const indices = Array.from({ length: array.length }, (_, i) => i);
-
-  // Shuffle indices instead of moving large objects
-  for (let i = indices.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [indices[i], indices[j]] = [indices[j], indices[i]];
-  }
-
-  // Map the shuffled indices to create new array
-  return indices.map((i) => array[i]);
+// Add this function near your other utility functions
+const isValidImageUrl = (url: string | undefined): boolean => {
+  return (
+    !!url &&
+    url.startsWith("http") &&
+    !url.includes("undefined") &&
+    !url.includes("null")
+  );
 };
 
 const Home: FC = (): React.ReactElement => {
@@ -253,13 +184,6 @@ const Home: FC = (): React.ReactElement => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [selectedAsset, setSelectedAsset] = useState<NFTAsset | null>(null);
-  const [gallery, setGallery] = useState<Array<NFTAsset | null>>(
-    new Array(5).fill(null)
-  );
-  const [selectGalleryIndex, setSelectGalleryIndex] = useState<number | null>(
-    null
-  );
-  const [editMode, setEditMode] = useState<boolean>(false);
 
   const publicClient = usePublicClient();
 
@@ -267,29 +191,15 @@ const Home: FC = (): React.ReactElement => {
     null
   );
 
-  const [shuffleKey, setShuffleKey] = useState(0);
+  const [searchInput, setSearchInput] = useState("");
+  const router = useRouter();
 
-  // Add this state for shuffle control
-  const [isShuffling, setIsShuffling] = useState(false);
-
-  const handleShuffle = debounce(() => {
-    // Prevent multiple rapid shuffles
-    if (isShuffling) return;
-
-    setIsShuffling(true);
-    const newAssets = shuffleArray(assets);
-
-    // Use RAF for smooth animation timing
-    requestAnimationFrame(() => {
-      setAssets(newAssets);
-      setShuffleKey((prev) => prev + 1);
-
-      // Reset shuffle state after animation
-      setTimeout(() => {
-        setIsShuffling(false);
-      }, 500);
-    });
-  }, 200);
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchInput.trim()) {
+      router.push(`/${searchInput.trim()}`);
+    }
+  };
 
   useEffect(() => {
     const resolveAddressOrEns = async () => {
@@ -311,11 +221,11 @@ const Home: FC = (): React.ReactElement => {
             } else {
               setResolutionError("Could not resolve ENS name");
             }
-          } catch (error) {
+          } catch {
             setResolutionError("Invalid ENS name or address");
           }
         }
-      } catch (error) {
+      } catch {
         setResolutionError("Error resolving address or ENS name");
       } finally {
         setIsResolvingAddress(false);
@@ -361,7 +271,7 @@ const Home: FC = (): React.ReactElement => {
         });
 
         // Shuffle the NFTs before setting them to state
-        setAssets(shuffleArray(validNFTs));
+        setAssets(validNFTs);
       } catch (err: unknown) {
         setError(
           typeof err === "object" && err !== null && "message" in err
@@ -440,14 +350,12 @@ const Home: FC = (): React.ReactElement => {
         initial={{ scale: 0.95 }}
         animate={{ scale: 1 }}
         exit={{ scale: 0.95 }}
-        className="bg-black/95 backdrop-blur-xl border border-white/10 rounded-3xl w-[95vw] h-[90vh] mx-auto relative overflow-hidden"
+        className="bg-black/95 backdrop-blur-xl border border-white/10 rounded-3xl 
+                   w-[95vw] max-w-6xl h-[90vh] mx-auto relative overflow-hidden"
       >
-        {/* Ambient background gradient */}
-        <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-blue-500/5" />
-
-        <div className="relative h-full flex flex-col md:flex-row">
+        <div className="relative h-full flex flex-col lg:flex-row">
           {/* Left side - Image Section */}
-          <div className="md:w-2/3 h-full relative group">
+          <div className="lg:w-2/3 h-[40vh] lg:h-full relative group">
             {/* Image container with gradient overlay */}
             <div className="absolute inset-0 flex items-center justify-center p-8">
               <div className="relative w-full h-full">
@@ -466,14 +374,15 @@ const Home: FC = (): React.ReactElement => {
                            33vw"
                     quality={75}
                     onLoadingComplete={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.style.transform = "scale(1)";
+                      // e is already an HTMLImageElement, no need for type assertion
+                      e.style.transform = "scale(1)";
 
                       // Use IntersectionObserver for hover effects
                       const observer = new IntersectionObserver(
                         (entries) => {
                           entries.forEach((entry) => {
                             if (entry.isIntersecting) {
+                              const target = e;
                               target.addEventListener("mouseenter", () => {
                                 target.style.transform = "scale(1.05)";
                               });
@@ -487,7 +396,7 @@ const Home: FC = (): React.ReactElement => {
                         { threshold: 0.1 }
                       );
 
-                      observer.observe(target);
+                      observer.observe(e);
                     }}
                   />
                 ) : (
@@ -518,7 +427,7 @@ const Home: FC = (): React.ReactElement => {
           </div>
 
           {/* Right side - Details Section */}
-          <div className="md:w-1/3 h-full border-l border-white/10">
+          <div className="lg:w-1/3 h-[60vh] lg:h-full border-t lg:border-t-0 lg:border-l border-white/10">
             <div className="h-full overflow-y-auto custom-scrollbar">
               <div className="p-8 space-y-8">
                 {/* Close button */}
@@ -602,7 +511,7 @@ const Home: FC = (): React.ReactElement => {
                   </button>
 
                   {showTraits && (
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {loading ? (
                         Array(4)
                           .fill(0)
@@ -614,7 +523,6 @@ const Home: FC = (): React.ReactElement => {
                           ))
                       ) : nftData?.traits ? (
                         nftData.traits.map((trait, index) => {
-                          // Calculate rarity percentage (mock data - replace with actual rarity data)
                           const rarityPercentage = Math.random() * 100;
                           const isRare = rarityPercentage < 10;
 
@@ -625,11 +533,13 @@ const Home: FC = (): React.ReactElement => {
                                         border border-white/[0.05] hover:border-white/10 transition-all duration-300
                                         ${isRare ? "bg-blue-500/10" : ""}`}
                             >
-                              <div className="text-white/40 text-xs uppercase tracking-wider font-medium">
+                              <div className="text-white/40 text-xs uppercase tracking-wider font-medium truncate">
                                 {trait.trait_type}
                               </div>
-                              <div className="text-white font-medium mt-2">
-                                {trait.value.toString()}
+                              <div className="text-white font-medium mt-2 break-words">
+                                <div className="max-h-12 overflow-y-auto custom-scrollbar">
+                                  {trait.value.toString()}
+                                </div>
                               </div>
                               <div className="text-white/30 text-xs mt-1">
                                 {rarityPercentage.toFixed(1)}% have this trait
@@ -708,87 +618,27 @@ const Home: FC = (): React.ReactElement => {
     );
   };
 
-  const SelectNFTModal = () => {
-    const handleSelectNFTForGallery = (nft: NFTAsset) => {
-      if (selectGalleryIndex !== null) {
-        const newGallery = [...gallery];
-        newGallery[selectGalleryIndex] = nft;
-        setGallery(newGallery);
-        setSelectGalleryIndex(null);
-      }
-    };
+  const handleImageLoadComplete = (element: HTMLImageElement) => {
+    element.style.transform = "scale(1)";
 
-    return (
-      <AnimatePresence>
-        {selectGalleryIndex !== null && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md"
-          >
-            <motion.div
-              initial={{ scale: 0.95 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.95 }}
-              className="bg-zinc-900/90 p-8 rounded-2xl border border-white/10 max-w-4xl w-full mx-4 relative"
-            >
-              <button
-                onClick={() => setSelectGalleryIndex(null)}
-                className="absolute top-4 right-4 text-white/40 hover:text-white/90 transition-colors"
-              >
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
-              <h2 className="text-2xl font-bold text-white mb-4">
-                Select an NFT for the Gallery
-              </h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 max-h-[60vh] overflow-y-auto">
-                {assets.map((nft) => (
-                  <div
-                    key={getAssetId(nft)}
-                    onClick={() => handleSelectNFTForGallery(nft)}
-                    className="border border-white/10 rounded-lg overflow-hidden cursor-pointer hover:border-white/30 transition-all"
-                  >
-                    {nft.image_url ? (
-                      <div className="relative w-full h-32">
-                        <Image
-                          src={nft.image_url}
-                          alt={nft.name}
-                          fill
-                          className="object-cover"
-                          unoptimized
-                        />
-                      </div>
-                    ) : (
-                      <div className="w-full h-32 flex items-center justify-center bg-zinc-800">
-                        <span className="text-white">No Image</span>
-                      </div>
-                    )}
-                    <div className="p-2">
-                      <p className="text-sm text-white truncate">
-                        {nft.name || "Unnamed NFT"}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            element.addEventListener("mouseenter", () => {
+              element.style.transform = "scale(1.05)";
+            });
+            element.addEventListener("mouseleave", () => {
+              element.style.transform = "scale(1)";
+            });
+            observer.unobserve(element);
+          }
+        });
+      },
+      { threshold: 0.1 }
     );
+
+    observer.observe(element);
   };
 
   if (isResolvingAddress) {
@@ -876,50 +726,11 @@ const Home: FC = (): React.ReactElement => {
           </div>
         )}
 
-        {/* Gallery Header */}
-        <div className="flex justify-between items-center mb-12">
+        {/* Gallery Header - Simplified without shuffle button */}
+        <div className="mb-12">
           <h1 className="text-5xl font-extrabold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent tracking-wide">
             NFT Gallery
           </h1>
-
-          {assets.length > 0 && (
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={handleShuffle}
-              disabled={isShuffling}
-              className={`
-                group relative px-6 py-3 bg-white/5 hover:bg-white/10 
-                border border-white/10 hover:border-white/20 
-                rounded-xl backdrop-blur-sm transition-all duration-300
-                ${isShuffling ? "opacity-50 cursor-not-allowed" : ""}
-              `}
-            >
-              <div className="flex items-center gap-2">
-                <svg
-                  className="w-5 h-5 text-white/70 group-hover:text-white/90 transition-all duration-300 
-                             group-hover:rotate-180"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                  />
-                </svg>
-                <span className="text-white/70 group-hover:text-white/90 font-medium transition-colors">
-                  Shuffle
-                </span>
-              </div>
-              <div
-                className="absolute inset-0 -z-10 bg-gradient-to-r from-purple-500/10 to-blue-500/10 
-                             opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl"
-              />
-            </motion.button>
-          )}
         </div>
 
         {/* Main Gallery Section */}
@@ -953,7 +764,6 @@ const Home: FC = (): React.ReactElement => {
               <LayoutGroup>
                 <motion.div
                   layout
-                  key={shuffleKey}
                   className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 auto-rows-fr"
                 >
                   {assets.map((nft, index) => (
@@ -971,20 +781,19 @@ const Home: FC = (): React.ReactElement => {
                           damping: 25,
                         },
                       }}
-                      exit={{ opacity: 0, scale: 0.8 }}
-                      transition={{
-                        layout: {
-                          type: "spring",
-                          stiffness: 300,
-                          damping: 25,
-                          duration: 0.5,
-                        },
+                      whileHover={{
+                        scale: 1.02,
+                        transition: { duration: 0.3 },
                       }}
                       className={`
                         group relative rounded-xl overflow-hidden bg-white/5 
                         border border-white/10 hover:border-white/30 transition-all duration-300
                         aspect-square ${getNFTDisplaySize(nft, index)}
+                        animate-morph cursor-pointer
                       `}
+                      style={{
+                        animationDelay: `${(index * 0.2) % 2}s`,
+                      }}
                       onClick={() => setSelectedAsset(nft)}
                     >
                       <motion.div
@@ -993,57 +802,62 @@ const Home: FC = (): React.ReactElement => {
                         initial={false}
                       >
                         <div className="relative w-full h-full">
-                          <Image
-                            src={getOptimizedImageUrl(
-                              nft.image_url || nft.display_image_url!
-                            )}
-                            alt={nft.name}
-                            fill
-                            className="object-cover will-change-transform"
-                            style={{
-                              transform: "scale(1)",
-                              transition: "transform 0.5s ease-out",
-                              backfaceVisibility: "hidden",
-                              WebkitBackfaceVisibility: "hidden",
-                            }}
-                            unoptimized={false}
-                            loading="lazy"
-                            sizes="(max-width: 640px) 100vw, 
-                                   (max-width: 1024px) 50vw,
-                                   33vw"
-                            quality={75}
-                            onLoadingComplete={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.style.transform = "scale(1)";
-
-                              // Use IntersectionObserver for hover effects
-                              const observer = new IntersectionObserver(
-                                (entries) => {
-                                  entries.forEach((entry) => {
-                                    if (entry.isIntersecting) {
-                                      target.addEventListener(
-                                        "mouseenter",
-                                        () => {
-                                          target.style.transform =
-                                            "scale(1.05)";
-                                        }
-                                      );
-                                      target.addEventListener(
-                                        "mouseleave",
-                                        () => {
-                                          target.style.transform = "scale(1)";
-                                        }
-                                      );
-                                      observer.unobserve(target);
-                                    }
-                                  });
-                                },
-                                { threshold: 0.1 }
-                              );
-
-                              observer.observe(target);
-                            }}
-                          />
+                          {isValidImageUrl(
+                            nft.image_url || nft.display_image_url
+                          ) ? (
+                            <Image
+                              src={getOptimizedImageUrl(
+                                nft.image_url || nft.display_image_url!
+                              )}
+                              alt={nft.name}
+                              fill
+                              className="object-cover will-change-transform"
+                              style={{
+                                transform: "scale(1)",
+                                transition: "transform 0.5s ease-out",
+                                backfaceVisibility: "hidden",
+                                WebkitBackfaceVisibility: "hidden",
+                              }}
+                              unoptimized={false}
+                              loading="lazy"
+                              sizes="(max-width: 640px) 100vw, 
+                                     (max-width: 1024px) 50vw,
+                                     33vw"
+                              quality={75}
+                              onError={() => {
+                                const imgElement = document.getElementById(
+                                  getAssetId(nft)
+                                );
+                                if (imgElement) {
+                                  imgElement.style.display = "none";
+                                }
+                              }}
+                              onLoadingComplete={(img) =>
+                                handleImageLoadComplete(img)
+                              }
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-white/5 backdrop-blur-sm">
+                              <div className="text-center p-4">
+                                <svg
+                                  className="w-8 h-8 mx-auto mb-2 text-white/40"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={1.5}
+                                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                                  />
+                                </svg>
+                                <p className="text-white/40 text-sm">
+                                  {nft.name || "Unnamed NFT"}
+                                </p>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </motion.div>
 
@@ -1057,34 +871,20 @@ const Home: FC = (): React.ReactElement => {
                       )}
 
                       <div
-                        className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/0 to-transparent 
+                        className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent 
                                     opacity-0 group-hover:opacity-100 transition-all duration-300"
                       />
 
                       <div
-                        className="absolute bottom-0 left-0 right-0 p-6 transform translate-y-full 
+                        className="absolute bottom-0 left-0 right-0 p-4 sm:p-6 transform translate-y-full 
                                     group-hover:translate-y-0 transition-transform duration-300"
                       >
-                        <h3 className="text-white font-medium text-lg md:text-xl truncate">
+                        <h3 className="text-white font-medium text-base sm:text-lg md:text-xl truncate">
                           {nft.name || "Unnamed NFT"}
                         </h3>
                         <p className="text-white/60 text-sm md:text-base truncate mt-1">
                           {nft.collection}
                         </p>
-
-                        {/* Quick action buttons */}
-                        <div className="flex items-center gap-3 mt-4">
-                          <a
-                            href={nft.opensea_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="px-4 py-2 bg-white/10 backdrop-blur-sm rounded-lg 
-                                     text-white/90 text-sm hover:bg-white/20 transition-colors"
-                          >
-                            View on OpenSea
-                          </a>
-                        </div>
                       </div>
                     </motion.div>
                   ))}
@@ -1118,75 +918,125 @@ const Home: FC = (): React.ReactElement => {
               <h2 className="text-3xl font-bold text-white mb-4">
                 Explore More Collections
               </h2>
-              <p className="text-white/60">
+              <p className="text-white/60 mb-8">
                 Discover amazing NFT collections from notable collectors
               </p>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {FEATURED_COLLECTORS.map((collector) => (
-                <motion.a
-                  key={collector.address}
-                  href={`/${collector.address}`}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="group relative bg-white/5 backdrop-blur-sm rounded-2xl overflow-hidden 
-                           border border-white/10 hover:border-white/20 transition-all duration-300"
-                >
-                  <div
-                    className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-blue-500/10 
-                                opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+              {/* New Search Section */}
+              <form
+                onSubmit={handleSearch}
+                className="max-w-xl mx-auto mb-16 group"
+              >
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    placeholder="Enter ENS or wallet address..."
+                    className="w-full px-6 py-4 bg-white/5 border border-white/10 
+                             rounded-2xl text-white placeholder-white/40
+                             focus:outline-none focus:border-white/20 focus:ring-2 
+                             focus:ring-purple-500/20 transition-all duration-300
+                             group-hover:bg-white/[0.07]"
                   />
+                  <button
+                    type="submit"
+                    className="absolute right-3 top-1/2 -translate-y-1/2
+                             px-4 py-2 bg-white/10 hover:bg-white/20
+                             rounded-xl text-white/80 hover:text-white
+                             transition-all duration-300
+                             flex items-center gap-2"
+                  >
+                    <span>Search</span>
+                    <svg
+                      className="w-4 h-4 transform group-hover:translate-x-1 transition-transform"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M14 5l7 7m0 0l-7 7m7-7H3"
+                      />
+                    </svg>
+                  </button>
 
-                  <div className="relative p-6 flex items-center gap-4">
-                    {collector.image ? (
-                      <div className="relative w-16 h-16">
-                        <Image
-                          src={collector.image}
-                          alt={collector.name}
-                          fill
-                          className="rounded-full object-cover"
-                          unoptimized
-                        />
+                  {/* Ambient glow effect */}
+                  <div
+                    className="absolute inset-0 -z-10 bg-gradient-to-r from-purple-500/10 via-blue-500/10 to-purple-500/10 
+                                opacity-0 group-hover:opacity-100 blur-xl transition-opacity duration-500 rounded-2xl"
+                  />
+                </div>
+              </form>
+
+              {/* Existing Featured Collectors Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {FEATURED_COLLECTORS.map((collector) => (
+                  <motion.a
+                    key={collector.address}
+                    href={`/${collector.address}`}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="group relative bg-white/5 backdrop-blur-sm rounded-2xl overflow-hidden 
+                             border border-white/10 hover:border-white/20 transition-all duration-300"
+                  >
+                    <div
+                      className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-blue-500/10 
+                                  opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                    />
+
+                    <div className="relative p-6 flex items-center gap-4">
+                      {collector.image ? (
+                        <div className="relative w-16 h-16">
+                          <Image
+                            src={collector.image}
+                            alt={collector.name}
+                            fill
+                            className="rounded-full object-cover"
+                            unoptimized
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
+                          <span className="text-white/40 text-xl">
+                            {collector.name.charAt(0)}
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="flex-1">
+                        <h3
+                          className="text-xl font-semibold text-white group-hover:text-white/90 
+                                     transition-colors mb-1"
+                        >
+                          {collector.name}
+                        </h3>
+                        <p className="text-white/60 text-sm line-clamp-2">
+                          {collector.description}
+                        </p>
                       </div>
-                    ) : (
-                      <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
-                        <span className="text-white/40 text-xl">
-                          {collector.name.charAt(0)}
-                        </span>
+
+                      <div className="text-white/40 group-hover:text-white/60 transition-colors">
+                        <svg
+                          className="w-6 h-6 transform group-hover:translate-x-1 transition-transform"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 5l7 7-7 7"
+                          />
+                        </svg>
                       </div>
-                    )}
-
-                    <div className="flex-1">
-                      <h3
-                        className="text-xl font-semibold text-white group-hover:text-white/90 
-                                   transition-colors mb-1"
-                      >
-                        {collector.name}
-                      </h3>
-                      <p className="text-white/60 text-sm line-clamp-2">
-                        {collector.description}
-                      </p>
                     </div>
-
-                    <div className="text-white/40 group-hover:text-white/60 transition-colors">
-                      <svg
-                        className="w-6 h-6 transform group-hover:translate-x-1 transition-transform"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M9 5l7 7-7 7"
-                        />
-                      </svg>
-                    </div>
-                  </div>
-                </motion.a>
-              ))}
+                  </motion.a>
+                ))}
+              </div>
             </div>
           </motion.div>
         )}

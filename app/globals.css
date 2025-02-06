@@ -82,4 +82,123 @@ body {
     grid-auto-rows: 0;
     grid-gap: 1rem;
   }
+
+  @keyframes subtle-breathe {
+    0% {
+      transform: scale(1) translate(0, 0);
+    }
+    50% {
+      transform: scale(1.01) translate(0, -2px);
+    }
+    100% {
+      transform: scale(1) translate(0, 0);
+    }
+  }
+
+  .animate-subtle-breathe {
+    animation: subtle-breathe 4s ease-in-out infinite;
+  }
+
+  .animate-subtle-breathe:hover {
+    animation-play-state: paused;
+  }
+
+  .grid > *:nth-child(3n) .animate-subtle-breathe {
+    animation-delay: -1s;
+  }
+
+  .grid > *:nth-child(3n + 1) .animate-subtle-breathe {
+    animation-delay: -2s;
+  }
+
+  .grid > *:nth-child(3n + 2) .animate-subtle-breathe {
+    animation-delay: -3s;
+  }
+
+  @keyframes morph {
+    0% {
+      transform: scale(1) translate(0, 0) rotate(0deg);
+    }
+    25% {
+      transform: scale(1.02) translate(2px, -2px) rotate(0.25deg);
+    }
+    50% {
+      transform: scale(0.98) translate(-1px, 1px) rotate(-0.25deg);
+    }
+    75% {
+      transform: scale(1.01) translate(-2px, -1px) rotate(0.1deg);
+    }
+    100% {
+      transform: scale(1) translate(0, 0) rotate(0deg);
+    }
+  }
+
+  .animate-morph {
+    animation: morph 8s ease-in-out infinite;
+    animation-fill-mode: both;
+  }
+
+  .animate-morph:hover {
+    animation-play-state: paused;
+  }
+
+  .grid > *:nth-child(4n) .animate-morph {
+    animation-delay: -1s;
+  }
+
+  .grid > *:nth-child(4n + 1) .animate-morph {
+    animation-delay: -3s;
+  }
+
+  .grid > *:nth-child(4n + 2) .animate-morph {
+    animation-delay: -5s;
+  }
+
+  .grid > *:nth-child(4n + 3) .animate-morph {
+    animation-delay: -7s;
+  }
+
+  .grid > *:nth-child(3n) .animate-morph {
+    animation-duration: 9s;
+  }
+
+  .grid > *:nth-child(3n + 1) .animate-morph {
+    animation-duration: 7s;
+  }
+
+  .grid > *:nth-child(3n + 2) .animate-morph {
+    animation-duration: 8s;
+  }
+
+  .grid > *:nth-child(2n) .animate-morph {
+    animation-timing-function: cubic-bezier(0.45, 0.05, 0.55, 0.95);
+  }
+
+  .grid > *:nth-child(2n + 1) .animate-morph {
+    animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
+  }
+
+  @keyframes glow {
+    0% {
+      opacity: 0.5;
+      transform: scale(0.95);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.05);
+    }
+    100% {
+      opacity: 0.5;
+      transform: scale(0.95);
+    }
+  }
+
+  .search-glow {
+    animation: glow 4s ease-in-out infinite;
+  }
+
+  /* Add smooth transition for input focus */
+  .search-input-transition {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
 }
